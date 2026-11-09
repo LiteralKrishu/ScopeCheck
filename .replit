@@ -1,0 +1,15 @@
+modules = ["nodejs-22"]
+run = ["npm", "start"]
+
+[env]
+HOST = "0.0.0.0"
+PORT = "3000"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "static"
+publicDir = "dist"
+build = ["sh", "-c", "npm ci --omit=optional && npm test && npm run build"]
