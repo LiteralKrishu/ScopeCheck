@@ -4,7 +4,7 @@ import {
 } from './domain.js';
 import { BACKUP_LIMIT, projectBackup, restoreProject } from './backup.js';
 import { createExample, demoMessage, examples } from './demo.js';
-import { readAgreement } from './pdf.js';
+import { readAgreement, readUtf8File } from './pdf.js';
 import { listProjects, writeProject } from './store.js';
 import {
   agreementPage, clauseEditor, dataPage, emptyWorkspace, logPage, logRows, navigation, recordPage, reviewDesk, topbar,
@@ -17,6 +17,7 @@ const dialog = document.querySelector('#project-dialog');
 const notice = document.querySelector('#notice');
 
 let projects = [];
+let displayedProject;
 let ai = false;
 let projectId = sessionStorage.getItem('scopecheck.project');
 let screen = 'review';
@@ -44,6 +45,8 @@ function render(focus = false) {
   else if (screen === 'log') main.innerHTML = logPage(project);
   else if (screen === 'record') main.innerHTML = recordPage(record, project.agreements.find(item => item.id === record.agreementId));
   else main.innerHTML = reviewDesk(project, agreement, ai);
+  // A background save can refresh projects without redrawing this screen.
+  displayedProject = project;
   if (focus) {
     main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
@@ -116,6 +119,10 @@ async function saveRecord(projectId, recordId, update) {
   });
 }
 
+function saveChange(project, record, action, values) {
+  return saveRecord(project.id, record.id, current => updateChange(current, action, values, record.change));
+}
+
 const actions = {
   'new-project'() {
     dialog.querySelector('form').reset();
@@ -154,16 +161,16 @@ const actions = {
     showNotice('Project backup downloaded.');
   },
   'export-record'() {
-    const project = activeProject();
+    const project = displayedProject;
     const record = activeRecord(project);
     if (!record) return;
     const agreement = project.agreements.find(item => item.id === record.agreementId);
     downloadFile(`scopecheck-record-${record.id.slice(0, 8)}.txt`, recordText(project, record, agreement));
   },
   async 'reopen-draft'() {
-    const project = activeProject();
+    const project = displayedProject;
     const record = activeRecord(project);
-    await saveRecord(project.id, record.id, current => updateChange(current, 'reopen'));
+    await saveChange(project, record, 'reopen');
     if (projectId === project.id && requestId === record.id) render(true);
     showNotice('Draft reopened for editing.');
   },
@@ -191,7 +198,7 @@ const actions = {
     showNotice('Project deleted.');
   },
   download() {
-    const project = activeProject();
+    const project = displayedProject;
     const record = activeRecord(project);
     if (!record?.change?.readyAt) return;
     downloadFile(`scopecheck-change-${record.id.slice(0, 8)}.txt`, changeText(project, record.change));
@@ -217,7 +224,6 @@ document.addEventListener('change', async event => {
   if (input.name !== 'messageFile') return;
   const form = input.form;
   const file = input.files[0];
-  importedFile = null;
   formError(form);
   if (!file) return;
   if (!/\.txt$/i.test(file.name) || file.size > LIMITS.request * 4) {
@@ -225,7 +231,7 @@ document.addEventListener('change', async event => {
     formError(form, 'Choose a UTF-8 TXT excerpt of up to 8,000 characters.');
     return;
   }
-  const task = file.text();
+  const task = readUtf8File(file);
   pendingImport = task;
   const field = form.elements.message;
   const previous = field.value;
@@ -292,7 +298,7 @@ const forms = {
   async 'restore-form'(values) {
     const { backup } = values;
     if (!backup?.name || backup.size > BACKUP_LIMIT) throw new Error('Choose a ScopeCheck JSON backup of up to 16 MB.');
-    const project = restoreProject(await backup.text());
+    const project = restoreProject(await readUtf8File(backup));
     await writeProject(project.id, () => project);
     projects = await listProjects();
     chooseProject(project.id, 'review');
@@ -360,17 +366,17 @@ const forms = {
   },
   async 'change-form'(values, form, submitter, project, record) {
     const action = submitter?.value || 'draft';
-    await saveRecord(project.id, record.id, current => updateChange(current, action, values));
+    await saveChange(project, record, action, values);
     if (form.isConnected) render(true);
     showNotice(action === 'ready' ? 'Change request ready to share.' : 'Draft saved.');
   },
   async 'shared-form'(_, form, __, project, record) {
-    await saveRecord(project.id, record.id, current => updateChange(current, 'shared'));
+    await saveChange(project, record, 'shared');
     if (form.isConnected) render(true);
     showNotice('Share recorded. You can now log the client response.');
   },
   async 'response-form'(values, form, submitter, project, record) {
-    await saveRecord(project.id, record.id, current => updateChange(current, submitter?.value, values));
+    await saveChange(project, record, submitter?.value, values);
     if (form.isConnected) render(true);
     showNotice('Client response recorded.');
   },
@@ -384,7 +390,7 @@ document.addEventListener('submit', async event => {
   if (form.dataset.busy) return;
   form.dataset.busy = 'true';
   const data = new FormData(form);
-  const project = activeProject();
+  const project = displayedProject;
   const controls = [...form.elements].filter(control => !control.disabled);
   const submitter = event.submitter;
   const label = submitter?.innerHTML;

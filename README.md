@@ -21,6 +21,8 @@ Open **Data & examples** to try each workflow with fictional data.
 
 The change log supports search and status filters. Export an evidence record to keep the original message, agreement version, exact quotes, review history, and written response together. A new agreement version applies to new checks.
 
+New change requests use INR by default. Choose a suggested currency or type its three-letter code. Enter the amount with a decimal point if needed. Leave out grouping separators. Older records keep their original price text.
+
 ## Data and checks
 
 The public app processes agreements and requests in the browser. Each browser and site address has its own project records. Use **Data & examples** to download a project backup before clearing browser data or moving to another browser. Restore creates a separate copy and checks the agreement references. Backups contain readable project data.

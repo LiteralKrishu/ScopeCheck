@@ -1,4 +1,6 @@
-import { CATEGORIES, CHANNELS, LIMITS, VERDICTS, id, validDate, verifyAssessment } from './domain.js';
+import {
+  CATEGORIES, CHANNELS, LIMITS, VERDICTS, amountFromPrice, id, validClauseId, validCurrency, validDate, validPriceAmount, verifyAssessment,
+} from './domain.js';
 
 export const BACKUP_LIMIT = 16 * 1024 * 1024;
 const format = 'scopecheck-project';
@@ -17,7 +19,7 @@ function validAgreement(agreement) {
     || agreement.pages.reduce((total, page) => total + page.length, 0) > LIMITS.agreement
     || !Array.isArray(agreement.clauses) || !agreement.clauses.length || agreement.clauses.length > LIMITS.clauses) return false;
   return agreement.clauses.every(clause => {
-    if (!clause || !/^C\d{2,3}$/.test(clause.id) || !CATEGORIES.includes(clause.category)
+    if (!clause || !validClauseId(clause.id) || !CATEGORIES.includes(clause.category)
       || !Number.isInteger(clause.page) || !Number.isInteger(clause.start) || clause.start < 0
       || !text(clause.quote, LIMITS.quote, true)) return false;
     return agreement.pages[clause.page]?.slice(clause.start, clause.start + clause.quote.length) === clause.quote;
@@ -34,7 +36,9 @@ function validDecision(decision, clauses) {
 function validChange(change, decision) {
   if (change === null) return true;
   if (decision?.verdict !== 'out' || !change || !text(change.work, LIMITS.request, true)
-    || !text(change.impact, 500) || !text(change.price, 120) || !timestamp(change.draftedAt)) return false;
+    || !text(change.impact, 500) || !text(change.price, LIMITS.price) || !timestamp(change.draftedAt)) return false;
+  if (change.currency !== undefined && (!validCurrency(change.currency)
+    || (change.price !== '' && (!change.price.startsWith(`${change.currency} `) || !validPriceAmount(amountFromPrice(change)))))) return false;
   if (change.status === 'draft') return change.readyAt === null && !change.sharedAt && !change.response;
   if (!change.impact.trim() || !change.price.trim() || !timestamp(change.readyAt)) return false;
   if (change.status === 'ready') return !change.sharedAt && !change.response;

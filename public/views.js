@@ -1,4 +1,4 @@
-import { CATEGORIES, CHANNELS, LIMITS, VERDICTS } from './domain.js';
+import { CATEGORIES, CHANNELS, DEFAULT_CURRENCY, LIMITS, VERDICTS, amountFromPrice } from './domain.js';
 import { examples } from './demo.js';
 
 const icons = {
@@ -45,6 +45,9 @@ function options(items, selected) {
 
 const channelOptions = (selected = 'Email') => options(CHANNELS.map(channel => [channel, channel]), selected);
 const categories = selected => options(CATEGORIES.map(category => [category, category]), selected);
+const currencyNames = Intl.DisplayNames && new Intl.DisplayNames(undefined, { type: 'currency' });
+const currencyOptions = options((Intl.supportedValuesOf?.('currency') ?? [DEFAULT_CURRENCY])
+  .map(code => [code, currencyNames?.of(code) ?? code]));
 const errorBox = '<p class="form-error" aria-live="polite" hidden></p>';
 const badge = (label, state = '') => `<span class="badge ${state}">${escape(label)}</span>`;
 const verdictBadge = verdict => badge(VERDICTS[verdict], verdict);
@@ -114,7 +117,7 @@ export function reviewDesk(project, agreement, ai) {
       <form id="request-form">
         <div class="fields"><label>Channel<select name="channel">${channelOptions()}</select></label>
         <label>Message date<input name="date" type="date" value="${today()}" required></label></div>
-        <label>Client message<textarea name="message" rows="4" maxlength="${LIMITS.request}" placeholder="Could you also add…" required></textarea></label>
+        <label>Client message<textarea name="message" rows="4" placeholder="Could you also add…" required></textarea></label>
         <label>${icon('clip')} Import a message excerpt <span class="optional">TXT</span><input type="file" name="messageFile" accept=".txt,text/plain"></label>
         ${ai ? '<label class="check"><input type="checkbox" name="ai"><span>Use AI for this request. Send the message and reviewed clauses to OpenAI.</span></label>' : ''}
         ${errorBox}
@@ -152,7 +155,7 @@ export function clauseEditor(clause, pageCount) {
     <button type="button" class="button quiet danger" data-action="remove-clause">Remove clause</button></div>
     <div class="fields"><label>Category<select name="category">${categories(clause.category)}</select></label>
     <label>Source page<select name="page">${options(Array.from({ length: pageCount }, (_, i) => [String(i), String(i + 1)]), String(clause.page))}</select></label></div>
-    <label>Exact quote<textarea name="quote" maxlength="${LIMITS.quote}" rows="2">${escape(clause.quote)}</textarea></label></div>`;
+    <label>Exact quote<textarea name="quote" rows="2">${escape(clause.quote)}</textarea></label></div>`;
 }
 
 export function agreementPage(project, agreement, draft) {
@@ -162,7 +165,7 @@ export function agreementPage(project, agreement, draft) {
     <section class="panel">${panelHead('01 / Source', agreement ? 'Add a new version' : 'Add an agreement', 'Upload a PDF with selectable text, upload a TXT file, or paste the verified text.')}
       <form id="agreement-source">
         <label>Agreement file<input type="file" name="file" accept=".pdf,.txt,application/pdf,text/plain"></label>
-        <label>Or paste agreement text<textarea name="source" rows="4" maxlength="${LIMITS.agreement}" placeholder="Paste the signed scope of work…"></textarea></label>
+        <label>Or paste agreement text<textarea name="source" rows="4" placeholder="Paste the signed scope of work…"></textarea></label>
         ${errorBox}
         <button class="button primary" type="submit">Extract clauses ${icon('arrow')}</button>
       </form>
@@ -265,7 +268,7 @@ function decisionPanel(record, agreement) {
         ${agreement.clauses.map(clause => `<label class="check"><input type="checkbox" name="citation" value="${clause.id}"${(decision?.citationIds ?? record.assessment.citationIds).includes(clause.id) ? ' checked' : ''}>
         <span><span class="ref">${clause.id} · ${clauseSource(agreement, clause)}</span> ${escape(clause.quote)}</span></label>`).join('')}
       </fieldset>
-      <label>Review note <span class="optional">Optional</span><textarea name="note" maxlength="1000" rows="2" placeholder="Add context or a question for the client"></textarea></label>
+      <label>Review note <span class="optional">Optional</span><textarea name="note" rows="2" placeholder="Add context or a question for the client"></textarea></label>
       ${errorBox}<button class="button primary" type="submit">Record decision</button>
     </form></section>`;
 }
@@ -274,11 +277,21 @@ function changePanel(record) {
   if (record.decision?.verdict !== 'out') return '';
   const change = record.change;
   if (!change || change.status === 'draft') {
+    const legacy = Boolean(change?.price) && change.currency === undefined;
+    const currency = legacy ? '' : change?.currency ?? DEFAULT_CURRENCY;
+    const priceHelp = legacy
+      ? 'Leave currency blank to keep the price as text. To use a currency code, enter the amount without the symbol.'
+      : 'Choose or type a three-letter currency code. Use a decimal point if needed. Leave out grouping separators.';
     return `<section class="panel">${panelHead('04 / Change request', 'Prepare a draft', 'Review the description. Set the time impact and price before you mark it ready.')}
       <form id="change-form">
-        <label>Requested work<textarea name="work" maxlength="${LIMITS.request}" rows="3" required>${escape(change?.work ?? record.message)}</textarea></label>
-        <div class="fields"><label>Time impact<input name="impact" maxlength="500" value="${escape(change?.impact)}" placeholder="2 extra business days"></label>
-        <label>Price<input name="price" maxlength="120" value="${escape(change?.price)}" placeholder="Enter amount and currency"></label></div>
+        <label>Requested work<textarea name="work" rows="3" required>${escape(change?.work ?? record.message)}</textarea></label>
+        <label>Time impact<input name="impact" value="${escape(change?.impact)}" placeholder="2 extra business days"></label>
+        <div class="fields">
+          <label>Currency code<input name="currency" list="currency-codes" value="${escape(currency)}" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby="price-help"></label>
+          <label>${legacy ? 'Price' : 'Amount'}<input name="price" inputmode="${legacy ? 'text' : 'decimal'}" value="${escape(change && amountFromPrice(change))}" placeholder="1000.00" aria-describedby="price-help"></label>
+        </div>
+        <datalist id="currency-codes">${currencyOptions}</datalist>
+        <p id="price-help" class="hint form-info">${priceHelp}</p>
         ${errorBox}<div class="actions">
           <button class="button secondary" type="submit" value="draft">Save draft</button>
           <button class="button primary" type="submit" value="ready">Mark ready to share</button></div>
@@ -296,7 +309,7 @@ function changePanel(record) {
     ${change.status === 'shared' ? `<form id="response-form" class="section-space">
       <div class="fields"><label>Response channel<select name="channel">${channelOptions(record.channel)}</select></label>
       <label>Response date<input name="date" type="date" value="${today()}" required></label></div>
-      <label>Written client response<textarea name="response" maxlength="${LIMITS.request}" rows="3" required></textarea></label>
+      <label>Written client response<textarea name="response" rows="3" required></textarea></label>
       ${errorBox}<div class="actions"><button class="button primary" type="submit" value="approved">Record approval</button>
       <button class="button secondary" type="submit" value="declined">Record decline</button></div></form>` : ''}
     ${response ? `<div class="section-space"><h3>Client response</h3><p class="hint">${escape(response.channel)} · ${dateLabel(response.date)}</p><blockquote class="quote">${escape(response.text)}</blockquote></div>` : ''}

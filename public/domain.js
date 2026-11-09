@@ -1,9 +1,15 @@
 export const LIMITS = Object.freeze({
-  agreement: 100_000, pages: 50, clauses: 100, quote: 1500, request: 8000, file: 8 * 1024 * 1024,
+  agreement: 100_000, pages: 50, clauses: 100, quote: 1500, request: 8000, price: 120, file: 8 * 1024 * 1024,
 });
 export const CATEGORIES = ['Deliverable', 'Exclusion', 'Revision limit', 'Timeline', 'Other'];
 export const VERDICTS = { in: 'In scope', out: 'Out of scope', unclear: 'Unclear' };
 export const CHANNELS = ['Email', 'WhatsApp', 'Slack', 'Other'];
+export const DEFAULT_CURRENCY = 'INR';
+
+const scopeCondition = /\b(?:if|unless|except|excluding|when|only|after|before|provided|providing that|as long as|subject to|depending on|contingent|conditional|optional|requires?|requiring|(?:additional|separate) (?:fee|charge|approval))\b/i;
+const scopeLimit = /\b(?:limited to|capped at|up to|at most|at least|no (?:more|less) than|maximum|minimum|for (?:the )?first|(?:within|outside|under|during) (?:of )?(?:the|this|a|an))\b/i;
+const countedLimit = /\b(?:first|last|next|above|below|over|under|beyond) (?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
+const listModifier = /^(?:for|outside|inside|within|under|during|beyond|through|until|per|above|below)\s/i;
 
 export function id() {
   return globalThis.crypto.randomUUID();
@@ -50,9 +56,10 @@ export function makeAgreement({ name, kind, pages }, rows) {
   requireValue(text.trim() && text.length <= LIMITS.agreement, 'Use an agreement with readable text within the size limit.');
   requireValue(rows.length > 0 && rows.length <= LIMITS.clauses, 'Keep between 1 and 100 clauses.');
   const clauses = rows.map(({ page, quote, category }, index) => {
-    const start = pages[page]?.indexOf(quote.trim()) ?? -1;
     quote = quote.trim();
-    requireValue(quote && quote.length <= LIMITS.quote && start >= 0, 'Each quote must appear exactly on its selected source page.');
+    requireValue(quote.length <= LIMITS.quote, 'Keep each quote within 1,500 characters.');
+    const start = pages[page]?.indexOf(quote) ?? -1;
+    requireValue(quote && start >= 0, 'Each quote must appear exactly on its selected source page.');
     requireValue(CATEGORIES.includes(category), 'Select a valid clause category.');
     return { id: `C${String(index + 1).padStart(2, '0')}`, page, start, quote, category };
   });
@@ -80,6 +87,17 @@ export function localAssessment(message, clauses) {
     const matches = clauses.filter(clause => mentionsSubject(clause.quote, subject));
     const verdicts = matches.map(clause => explicitVerdict(clause, subject));
     if (verdicts.length && verdicts[0] && verdicts.every(verdict => verdict === verdicts[0])) {
+      const sourceOrder = [...clauses].sort((a, b) =>
+        (a.page ?? 0) - (b.page ?? 0) || (a.start ?? 0) - (b.start ?? 0));
+      const continuation = sourceOrder.findIndex((clause, index) =>
+        matches.includes(sourceOrder[index - 1]) && isScopeContinuation(clause.quote));
+      if (continuation >= 0) {
+        return {
+          verdict: 'unclear', method: 'local',
+          citationIds: [sourceOrder[continuation - 1].id, sourceOrder[continuation].id],
+          reason: 'The next reviewed clause may qualify the scope. Confirm whether the condition or limit applies before deciding.',
+        };
+      }
       return {
         verdict: verdicts[0], method: 'rules', citationIds: matches.slice(0, 4).map(clause => clause.id),
         reason: 'The request names an item explicitly covered by the quoted scope. Check the agreement before recording your decision.',
@@ -111,17 +129,32 @@ function mentionsSubject(quote, subject) {
   return ` ${normalized} `.includes(` ${subject} `);
 }
 
+function isScopeContinuation(quote) {
+  const text = quote.replace(/^(?:\d+[.)]\s*|[-•]\s*)/, '').replace(/\s+/g, ' ');
+  const condition = scopeCondition.exec(text);
+  const limit = scopeLimit.exec(text) ?? countedLimit.exec(text);
+  return condition?.index === 0 || limit?.index === 0
+    || Boolean((condition || limit) && /^(?:this|that|these|those|it|they|the (?:above|foregoing|preceding))\b/i.test(text));
+}
+
 function explicitVerdict(clause, subject) {
   const quote = clause.quote.trim().replace(/^(?:\d+[.)]\s*|[-•]\s*)/, '').replace(/\.$/, '');
+  const wording = quote.replace(/\s+/g, ' ');
+  if (scopeCondition.test(wording) || scopeLimit.test(wording) || countedLimit.test(wording)) return null;
   const prefix = /^(included|includes|in scope|excluded|excludes|out of scope):\s*(.+)$/i.exec(quote);
   const suffix = /^(.+?)\s+(?:is|are)\s+(included|excluded)(?:\s+(?:in|from) (?:the|this) project)?$/i.exec(quote);
   const scope = (prefix?.[1] ?? suffix?.[2])?.toLowerCase();
   const items = prefix?.[2] ?? suffix?.[1];
-  const subjects = items?.split(/,\s*(?:and\s+)?|\s+and\s+/i).map(simpleSubject);
+  const subjects = items?.split(/,\s*(?:and\s+)?|\s+and\s+/i)
+    .map(item => listModifier.test(item.trim()) ? null : simpleSubject(item));
   if (!subjects?.every(Boolean) || !subjects.includes(subject)) return null;
   if (clause.category === 'Deliverable' && ['included', 'includes', 'in scope'].includes(scope)) return 'in';
   if (clause.category === 'Exclusion' && ['excluded', 'excludes', 'out of scope'].includes(scope)) return 'out';
   return null;
+}
+
+export function validClauseId(value) {
+  return typeof value === 'string' && /^C\d{2,3}$/.test(value);
 }
 
 export function verifyAssessment(candidate, clauses) {
@@ -168,18 +201,43 @@ export function reviewRequest(request, agreement, verdict, citationIds, note, ex
   };
 }
 
-export function updateChange(request, action, values = {}) {
+export function validCurrency(code) {
+  return typeof code === 'string' && /^[A-Z]{3}$/.test(code);
+}
+
+export function validPriceAmount(amount) {
+  return typeof amount === 'string' && amount.length <= LIMITS.price - 4 && /^[0-9]+(?:\.[0-9]+)?$/.test(amount);
+}
+
+export function amountFromPrice(change) {
+  return change.currency && change.price ? change.price.slice(4) : change.price;
+}
+
+export function updateChange(request, action, values = {}, expectedChange = request.change) {
   const change = request.change;
+  requireValue(JSON.stringify(change) === JSON.stringify(expectedChange),
+    'This change request was updated in another tab. Reload to review the latest version.');
   const at = new Date().toISOString();
   requireValue(request.decision?.verdict === 'out', 'Record an out-of-scope decision before preparing a change request.');
   if (action === 'draft' || action === 'ready') {
     requireValue(!change || change.status === 'draft', 'Only a draft can be edited.');
     const { work, impact, price } = values;
-    requireValue(work?.trim() && work.length <= LIMITS.request, 'Describe the requested work.');
-    requireValue(impact.length <= 500 && price.length <= 120, 'Keep the time impact and price brief.');
-    if (action === 'ready') requireValue(impact.trim() && price.trim(), 'Set the time impact and price before marking the draft ready.');
+    requireValue(work?.trim() && work.length <= LIMITS.request, 'Describe the requested work in up to 8,000 characters.');
+    requireValue(impact.length <= 500 && typeof price === 'string' && price.length <= LIMITS.price,
+      'Use up to 500 characters for the time impact and 120 for the price.');
+    const legacy = Boolean(change?.price) && change.currency === undefined;
+    const enteredCode = values.currency ?? (legacy ? '' : change?.currency ?? DEFAULT_CURRENCY);
+    const code = typeof enteredCode === 'string' ? enteredCode.trim() : null;
+    const keepLegacy = legacy && code === '';
+    const amount = price.trim();
+    requireValue(keepLegacy || (code && /^[A-Za-z]{3}$/.test(code)), 'Enter a three-letter currency code, such as INR.');
+    requireValue(keepLegacy || !amount || validPriceAmount(amount),
+      'Use up to 116 characters for the amount. Enter digits and a decimal point if needed. Leave out grouping separators.');
+    if (action === 'ready') requireValue(impact.trim() && amount, 'Set the time impact and price before marking the draft ready.');
+    const currency = keepLegacy ? '' : code.toUpperCase();
     return { ...request, change: {
-      work: work.trim(), impact: impact.trim(), price: price.trim(), status: action,
+      work: work.trim(), impact: impact.trim(), price: amount && currency ? `${currency} ${amount}` : amount,
+      ...(currency ? { currency } : {}), status: action,
       draftedAt: change?.draftedAt ?? at, readyAt: action === 'ready' ? at : null,
     } };
   }
@@ -192,8 +250,9 @@ export function updateChange(request, action, values = {}) {
     return { ...request, change: { ...change, status: 'draft', readyAt: null } };
   }
   requireValue(change?.status === 'shared' && ['approved', 'declined'].includes(action), 'Mark the change request shared before logging a response.');
-  requireValue(validDate(values.date) && CHANNELS.includes(values.channel) && values.response?.trim()
-    && values.response.length <= LIMITS.request, 'Enter the client response, channel, and date.');
+  requireValue(validDate(values.date) && CHANNELS.includes(values.channel) && values.response?.trim(),
+    'Enter the client response, channel, and date.');
+  requireValue(values.response.length <= LIMITS.request, 'Keep the written client response within 8,000 characters.');
   return { ...request, change: {
     ...change, status: action,
     response: { text: values.response, date: values.date, channel: values.channel, recordedAt: at },

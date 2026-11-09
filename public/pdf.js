@@ -1,9 +1,18 @@
 import { LIMITS } from './domain.js';
 
+export async function readUtf8File(file) {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error('Invalid UTF-8. Save the file as UTF-8 and try again.');
+  }
+}
+
 export async function readAgreement(file) {
   if (file.size > LIMITS.file) throw new Error('Choose an agreement file of 8 MB or less.');
   if (/\.txt$/i.test(file.name)) {
-    return { name: file.name, kind: 'text', pages: [(await file.text()).replace(/\r\n?/g, '\n')] };
+    return { name: file.name, kind: 'text', pages: [(await readUtf8File(file)).replace(/\r\n?/g, '\n')] };
   }
   if (!/\.pdf$/i.test(file.name)) throw new Error('Choose a PDF or TXT file.');
   const { getDocument, GlobalWorkerOptions } = await import('/pdfjs/pdf.mjs');

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { CATEGORIES, LIMITS } from '../public/domain.js';
+import { CATEGORIES, LIMITS, validClauseId } from '../public/domain.js';
 import { assess } from './assessment.js';
 
 const PUBLIC_FILES = new Set([
@@ -47,7 +47,7 @@ function validInput(input) {
   const { consent, message, clauses } = input ?? {};
   return consent === true && typeof message === 'string' && message.trim() && message.length <= LIMITS.request
     && Array.isArray(clauses) && clauses.length > 0 && clauses.length <= LIMITS.clauses
-    && clauses.every(clause => clause && /^C\d{2,3}$/.test(clause.id)
+    && clauses.every(clause => clause && validClauseId(clause.id)
       && CATEGORIES.includes(clause.category) && typeof clause.quote === 'string'
       && clause.quote.trim() && clause.quote.length <= LIMITS.quote)
     && new Set(clauses.map(clause => clause.id)).size === clauses.length
