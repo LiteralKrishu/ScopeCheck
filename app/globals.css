@@ -316,6 +316,10 @@ dialog .actions { justify-content: flex-end; }
 dialog::backdrop { background: #0a1c55a1; }
 .workspace-error { display: grid; justify-items: start; gap: 1rem; max-width: 50rem; margin: 12vh auto; padding: 1.5rem; }
 
+.privacy-page { display: grid; gap: 1.35rem; width: min(100%, 49rem); margin: 0 auto; padding: 2rem clamp(1.25rem, 5vw, 3rem) 4rem; }
+.privacy-page .brand { width: fit-content; color: var(--ink); text-decoration: none; }
+.privacy-page section { display: grid; gap: .48rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+
 @media (max-width: 1060px) {
   .workspace-shell { grid-template-columns: 204px minmax(0, 1fr); }
   .desk-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: .85rem; }

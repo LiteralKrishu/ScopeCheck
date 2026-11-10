@@ -75,7 +75,7 @@ export default async function SignIn({ searchParams }) {
           <SignInButton className="button primary" pendingLabel="Sending link…"><Mail size={17} /> Email me a sign-in link</SignInButton>
         </form>}
         {!methods.google && !methods.email && !error && <p className="message" role="status">Sign-in is unavailable. Ask your workspace administrator to configure a sign-in method.</p>}
-        <p className="signin-foot">Access your projects from any device.</p>
+        <p className="signin-foot"><a href="/privacy">Privacy notice</a></p>
       </div>
     </section>
   </main>;
