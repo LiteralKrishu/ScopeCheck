@@ -2,6 +2,8 @@
 
 ScopeCheck helps fixed-price web developers review a client request against a signed agreement. The pilot tests whether keeping the original message, agreement evidence, and written approval together makes change requests easier to handle.
 
+This plan describes the original browser-only pilot. See the [release guide](release.md) for the current server deployment.
+
 ## Scope
 
 - Create projects and review clauses from a PDF or text agreement.

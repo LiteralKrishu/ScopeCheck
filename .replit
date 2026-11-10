@@ -1,15 +1,11 @@
 modules = ["nodejs-22"]
-run = ["npm", "start"]
-
-[env]
-HOST = "0.0.0.0"
-PORT = "3000"
+run = ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
 
 [[ports]]
 localPort = 3000
 externalPort = 80
 
 [deployment]
-deploymentTarget = "static"
-publicDir = "dist"
-build = ["sh", "-c", "npm ci --omit=optional && npm test && npm run build"]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm ci && npm test && npm run build"]
+run = ["npm", "start", "--", "--hostname", "0.0.0.0"]

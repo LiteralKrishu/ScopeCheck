@@ -1,48 +1,48 @@
 # ScopeCheck
 
-ScopeCheck is a change-control workspace. It links a request to the agreed scope, shows exact agreement quotes, and records the decision and any written approval. It works in a browser without an account.
+ScopeCheck is a change-control workspace. It checks client requests against a reviewed agreement and keeps the original message, exact agreement quotes, decisions, and written approvals together.
 
-## Try a workflow
+## Run locally
 
-- **Fixed-price development.** Check an added feature against the signed statement of work. Prepare a priced change request and record the client's response.
-- **Creative and agency work.** Check added deliverables and revision rounds against the creative brief. Keep a record when the client approves new work.
-- **Internal change control.** Check a stakeholder request against a rollout plan or service agreement. Record the schedule impact and written sign-off.
+Use Node.js 22.13 or later and Redis 6.2 or later.
 
-Open **Data & examples** to try each workflow with fictional data.
+```sh
+npm ci
+cp .env.example .env.local
+openssl rand -base64 32
+docker run --rm --name scopecheck-redis -p 127.0.0.1:6379:6379 \
+  -v scopecheck-redis:/data redis:7.4-alpine redis-server --appendonly yes
+```
+
+Set `AUTH_SECRET` in `.env.local` to the generated value. Set `REDIS_URL` if Redis uses a different address. Configure at least one sign-in method.
+
+- **Google.** Create an OAuth web client. Add `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI. Set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. ScopeCheck accepts verified Gmail and Google Workspace addresses.
+- **Email link.** Set `AUTH_RESEND_KEY` and `AUTH_EMAIL_FROM` to a Resend key and a sender on a verified domain. Each link expires after 15 minutes and works once.
+
+Start the app in a separate terminal with `npm run dev`. Open [ScopeCheck](http://localhost:3000). Use the same address for `AUTH_URL` and in the browser. If you signed up by email, sign in and use **Account → Connect Google** to add Google to the same account.
 
 ## Review a request
 
-1. Add a PDF with selectable text, a UTF-8 TXT file, or pasted agreement text.
-2. Review the extracted clauses. Set each category and keep the exact quotes you need.
-3. Paste a message or import a UTF-8 TXT excerpt. Enter the channel and date.
-4. Check the request. Read the evidence and record **In scope**, **Out of scope**, or **Unclear**. Add a follow-up to an unclear decision when you get more information.
-5. For an out-of-scope decision, set the time impact and price. Review and download the change request.
-6. Share it through your usual channel. Mark it shared and record the written approval or decline.
+1. Create a project. Upload a PDF with selectable text, upload a UTF-8 TXT file, or paste the agreement.
+2. Review the extracted clauses and save the agreement version.
+3. Paste the client message or import a TXT excerpt. Set its channel and date.
+4. Check the request and review the cited clauses. Record **In scope**, **Out of scope**, or **Unclear**.
+5. For an out-of-scope decision, prepare a change request with the time impact and price. Share the draft through your usual channel. Record the written approval or decline.
 
-The change log supports search and status filters. Export an evidence record to keep the original message, agreement version, exact quotes, review history, and written response together. A new agreement version applies to new checks.
+Use **Change log** to find requests and **Export evidence** to download a record. Use **Data and examples** to open fictional projects or download and restore backups.
 
-New change requests use INR by default. Choose a suggested currency or type its three-letter code. Enter the amount with a decimal point if needed. Leave out grouping separators. Older records keep their original price text.
+## Project data
 
-## Data and checks
+Redis stores project records and sign-in sessions. Each account has a private workspace. The browser uses an HTTP-only cookie to identify the session.
 
-The public app processes agreements and requests in the browser. Each browser and site address has its own project records. Use **Data & examples** to download a project backup before clearing browser data or moving to another browser. Restore creates a separate copy and checks the agreement references. Backups contain readable project data.
+The app can be installed from a supported browser. On iOS, use Safari’s **Share → Add to Home Screen**. Project access and updates require a connection. When the app is offline, it shows a reconnect screen.
 
-The local checker suggests a verdict when it finds explicit matching scope language. It sends ambiguous or mixed requests to review. A person confirms every decision.
+To bring projects from the old version, open that version in the original browser and download each project backup. Sign in to the new app and restore the files in **Data and examples**. Backups contain readable project data. Store them somewhere private.
 
-For optional AI checks in a local installation, copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and restart. Select **Use AI for this request** to send that message and the reviewed quotes to OpenAI. ScopeCheck validates the returned citation IDs and displays exact quotes from the agreement. [Responses API](https://platform.openai.com/docs/api-reference/responses)
+The built-in checker looks for explicit scope language. A person confirms every decision. To enable optional AI checks, set `OPENAI_API_KEY`. ScopeCheck sends the current request and reviewed clauses to OpenAI only when the user selects the AI option for that request.
 
-Agreements support up to 50 PDF pages, 100,000 characters, and 100 reviewed clauses. Uploads can be up to 8 MB. Requests and responses can contain up to 8,000 characters. For scanned or locked PDFs, paste verified text. [PDF.js](https://mozilla.github.io/pdf.js/)
+## Verify and deploy
 
-## Run and verify
+Run `npm test` and `npm run build`. Set `SCOPE_CHECK_TEST_REDIS_URL` to a test instance to include Redis integration tests. Run `npm start` to serve the production build.
 
-Use Node.js 22.13 or later.
-
-```sh
-npm ci --omit=optional
-npm test
-npm start
-```
-
-Open [the local workspace](http://127.0.0.1:3000). Run `npm run build` to generate the public website in `dist/`.
-
-See the [release guide](docs/release.md) and [pilot plan](docs/build-plan.md).
+See the [release guide](docs/release.md) for deployment and verification steps.

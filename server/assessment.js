@@ -1,4 +1,4 @@
-import { localAssessment, verifyAssessment } from '../public/domain.js';
+import { localAssessment, verifyAssessment } from '../lib/domain.js';
 
 const instructions = [
   'Compare one client request with the reviewed excerpts of a fixed-price project agreement.',

@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { assess } from '../server/assessment.js';
-import { makeServer } from '../server/index.js';
+import { updateProject } from '../server/project-commands.js';
 
 const input = {
   message: 'Can you add online payments?',
@@ -47,34 +46,9 @@ test('invalid, refused, and failed provider responses remain unclear', async () 
   }
 });
 
-test('the assessment endpoint returns 400 for non-string clause IDs', async () => {
-  let providerCalls = 0;
-  const server = makeServer({
-    key: 'test-key',
-    fetcher: async () => {
-      providerCalls++;
-      return new Response('', { status: 502 });
-    },
-  });
-  const [handleRequest] = server.listeners('request');
-  for (const id of [{ toString: null }, ['C01']]) {
-    const body = { ...input, consent: true, clauses: [{ ...input.clauses[0], id }] };
-    const request = Object.assign(Readable.from([Buffer.from(JSON.stringify(body))]), {
-      method: 'POST',
-      url: '/api/assess',
-      headers: {
-        host: '127.0.0.1:3000',
-        origin: 'http://127.0.0.1:3000',
-        'content-type': 'application/json',
-      },
-    });
-    const response = {
-      setHeader() {},
-      writeHead(status) { this.status = status; },
-      end() {},
-    };
-    await handleRequest(request, response);
-    assert.equal(response.status, 400);
-  }
-  assert.equal(providerCalls, 0);
+test('request commands reject client-supplied agreement evidence', async () => {
+  await assert.rejects(updateProject('unused', 'unused', {
+    kind: 'request', revision: crypto.randomUUID(), message: input.message,
+    channel: 'Email', date: '2026-11-10', filename: null, ai: true, clauses: input.clauses,
+  }), error => error.status === 400);
 });

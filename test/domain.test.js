@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   LIMITS, amountFromPrice, changeText, localAssessment, makeAgreement, makeRequest, reviewRequest,
   suggestClauses, updateChange, verifyAssessment,
-} from '../public/domain.js';
+} from '../lib/domain.js';
 
 const source = {
   name: 'Website scope.pdf', kind: 'pdf',

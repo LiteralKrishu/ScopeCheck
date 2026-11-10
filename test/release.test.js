@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { projectBackup, restoreProject } from '../public/backup.js';
-import { createExample, demoProject } from '../public/demo.js';
-import { localAssessment, recordText, reviewRequest, updateChange } from '../public/domain.js';
-import { readAgreement, readUtf8File } from '../public/pdf.js';
+import { projectBackup, restoreProject } from '../lib/backup.js';
+import { createExample, demoProject } from '../lib/demo.js';
+import { localAssessment, recordText, reviewRequest, updateChange } from '../lib/domain.js';
+import { readAgreement, readUtf8File } from '../lib/pdf.js';
 
 test('local suggestions require an explicit match and defer mixed or conflicting requests', () => {
   const web = createExample('web');
